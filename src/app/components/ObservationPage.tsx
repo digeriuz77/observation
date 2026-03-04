@@ -790,18 +790,26 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
 
                         {/* Formative Tags */}
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-slate-600 mb-2">Formative Methods Observed</label>
+                            <label className="block text-sm font-medium text-slate-600 mb-2">
+                                Formative Methods Observed
+                                <span className="ml-2 px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded-full text-xs font-bold">
+                                    {selectedTags.length}
+                                </span>
+                            </label>
                             <div className="flex flex-wrap gap-2">
                                 {formativeTags.map(tag => (
                                     <button
                                         key={tag}
                                         onClick={() => toggleTag(tag)}
                                         className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${selectedTags.includes(tag)
-                                            ? 'bg-teal-700 text-white shadow-md'
+                                            ? 'bg-cyan-600 text-white shadow-md'
                                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                             }`}
                                     >
                                         {tag}
+                                        {selectedTags.includes(tag) && (
+                                            <span className="ml-1">✓</span>
+                                        )}
                                     </button>
                                 ))}
                             </div>
@@ -811,6 +819,9 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                         <div>
                             <label className="block text-sm font-medium text-slate-600 mb-2">
                                 Exact Quotes
+                                <span className="ml-2 px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded-full text-xs font-bold">
+                                    {verbatimQuotes.split('\n').filter(q => q.trim().length > 0).length}
+                                </span>
                                 <span className="font-normal text-slate-400 ml-2">(Use keyboard mic to dictate)</span>
                             </label>
                             <textarea
