@@ -15,12 +15,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils/classnames';
 
-// Types for observation data
+// Types for observation data - matches database schema
 interface ObservationData {
     teacher_name: string;
     subject: string;
     grade_level: string;
     observed_at: string;
+    observer_name: string;  // Who made the observation
 
     // Domain 1 & 2: Quick Checks
     objective_visible: boolean;
@@ -47,7 +48,7 @@ interface ObservationData {
     // Environment & Language
     count_code_switching: number;
 
-    // Qualitative Data - Changed to counters
+    // Qualitative Data - JSONB in database
     formative_methods_count: Record<string, number>;
     verbatim_quotes: string;
 
@@ -455,6 +456,7 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
             subject,
             grade_level: gradeLevel,
             observed_at: new Date().toISOString(),
+            observer_name: observerName,  // Track who made this observation
 
             // Domain 1 & 2
             objective_visible: objectiveClear,
