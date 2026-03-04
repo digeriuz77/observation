@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
     Play,
@@ -13,6 +13,7 @@ import {
     AlertCircle,
     ChevronLeft
 } from 'lucide-react';
+import { cn } from '@/utils/classnames';
 
 // Types for observation data
 interface ObservationData {
@@ -61,28 +62,39 @@ interface HistoryEntry {
     previousValue: number;
 }
 
-// Predefined options - Primary only (Years 1-6)
-const subjects = ['Mathematics', 'Science', 'English', 'Malay', 'Chinese', 'Art', 'Music', 'PE', 'Integrated'];
-const gradeLevels = ['Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6'];
-const formativeTags = ['Hands Up', 'Cold Call', 'Turn & Talk', 'Whiteboards', 'Think-Pair-Share', 'Choral Response'];
-const departments = ['Science', 'Mathematics', 'English', 'Malay', 'Chinese', 'ICT', 'Art', 'Music', 'PE', 'Integrated'];
-const schools = ["St. Augustine's", "St. Bartholomew", 'SK Nanga Ajau', 'SK Nanga Spak'];
+// Constants moved outside component to avoid recreation on every render
+const SUBJECTS = ['Mathematics', 'Science', 'English', 'Malay', 'Chinese', 'Art', 'Music', 'PE', 'Integrated'] as const;
+const GRADE_LEVELS = ['Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6'] as const;
+const FORMATIVE_TAGS = ['Hands Up', 'Cold Call', 'Turn & Talk', 'Whiteboards', 'Think-Pair-Share', 'Choral Response'] as const;
+const SCHOOLS = ["St. Augustine's", "St. Bartholomew", 'SK Nanga Ajau', 'SK Nanga Spak'] as const;
 
-export function ObservationPage({ observerName, onBack }: { observerName: string; onBack: () => void }) {
+// Understanding options constants
+const UNDERSTANDING_OPTIONS = [
+    { value: 'None', label: "Couldn't Explain" },
+    { value: 'Task', label: 'Explained Task' },
+    { value: 'Concept', label: 'Explained Concept' }
+] as const;
+
+type UnderstandingValue = 'None' | 'Task' | 'Concept' | '';
+
+interface ObservationPageProps {
+    observerName: string;
+    onBack: () => void;
+}
+
+export function ObservationPage({ observerName, onBack }: ObservationPageProps) {
     // Context state
     const [teacherName, setTeacherName] = useState('');
     const [subject, setSubject] = useState('');
     const [gradeLevel, setGradeLevel] = useState('');
-
-    // Context state
     const [schoolName, setSchoolName] = useState('');
 
-    // Domain 1: Learning Objective Check (moved to observation page)
+    // Domain 1: Learning Objective Check
     const [objectiveClear, setObjectiveClear] = useState(false);
     const [keyConcept, setKeyConcept] = useState('');
 
-    // Domain 2: Student Understanding (moved to observation page)
-    const [studentUnderstanding, setStudentUnderstanding] = useState<'None' | 'Task' | 'Concept' | ''>('');
+    // Domain 2: Student Understanding Check
+    const [studentUnderstanding, setStudentUnderstanding] = useState<UnderstandingValue>('');
 
     // Observation active state
     const [isObserving, setIsObserving] = useState(false);
@@ -95,7 +107,7 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
     const [timeStudentTalking, setTimeStudentTalking] = useState(0);
     const [timeSilence, setTimeSilence] = useState(0);
 
-    // Talk time interval refs
+    // Talk time interval ref
     const talkTimeInterval = useRef<NodeJS.Timeout | null>(null);
 
     // Teacher questions
@@ -131,7 +143,24 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
     // LocalStorage key for this observer
-    const draftKey = `observation_draft_${observerName.replace(/\s+/g, '_')}`;
+    const draftKey = useMemo(() => `observation_draft_${observerName.replace(/\s+/g, '_')}`, [observerName]);
+
+    // Memoized callbacks
+    const handleStopObservation = useCallback(() => {
+        setIsObserving(false);
+        setActiveTalkState(null);
+        if (masterInterval) clearInterval(masterInterval);
+        if (talkTimeInterval.current) clearInterval(talkTimeInterval.current);
+    }, [masterInterval]);
+
+    const clearDraft = useCallback(() => {
+        try {
+            localStorage.removeItem(draftKey);
+            setLastSaved(null);
+        } catch (e) {
+            console.error('Failed to clear draft:', e);
+        }
+    }, [draftKey]);
 
     // Load draft from localStorage on mount
     useEffect(() => {
@@ -217,16 +246,6 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
         draftKey, isObserving
     ]);
 
-    // Clear draft after successful submission
-    const clearDraft = () => {
-        try {
-            localStorage.removeItem(draftKey);
-            setLastSaved(null);
-        } catch (e) {
-            console.error('Failed to clear draft:', e);
-        }
-    };
-
     // Check network status
     useEffect(() => {
         const handleOnline = () => setOfflineMode(false);
@@ -255,7 +274,7 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
         } else if (masterTimer >= 900) {
             handleStopObservation();
         }
-    }, [isObserving]);
+    }, [isObserving, masterTimer, handleStopObservation]);
 
     // Talk time tracker - updates every second
     useEffect(() => {
@@ -276,24 +295,26 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
     }, [isObserving, activeTalkState]);
 
     // Calculate average wait time
-    const avgWaitTime = waitTimes.length > 0
-        ? waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length
-        : 0;
+    const avgWaitTime = useMemo(() => {
+        return waitTimes.length > 0
+            ? waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length
+            : 0;
+    }, [waitTimes]);
 
     // Format time helper
-    const formatTime = (seconds: number) => {
+    const formatTime = useCallback((seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
+    }, []);
 
     // Add to history for undo
-    const addToHistory = (type: string, value: number, previousValue: number) => {
+    const addToHistory = useCallback((type: string, value: number, previousValue: number) => {
         setHistory(prev => [...prev.slice(-9), { type, value, previousValue }]); // Keep last 10
-    };
+    }, []);
 
     // Undo last action
-    const handleUndo = () => {
+    const handleUndo = useCallback(() => {
         if (history.length === 0) return;
 
         const last = history[history.length - 1];
@@ -308,40 +329,46 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
             case 'respPeer': setRespPeer(last.previousValue); break;
             case 'codeSwitching': setCodeSwitching(last.previousValue); break;
         }
-    };
+    }, [history]);
 
     // Increment handlers with undo support
-    const incrementQClosed = () => {
+    const incrementQClosed = useCallback(() => {
         addToHistory('qClosed', qClosed + 1, qClosed);
         setQClosed(prev => prev + 1);
-    };
-    const incrementQOpen = () => {
+    }, [qClosed, addToHistory]);
+
+    const incrementQOpen = useCallback(() => {
         addToHistory('qOpen', qOpen + 1, qOpen);
         setQOpen(prev => prev + 1);
-    };
-    const incrementQProbe = () => {
+    }, [qOpen, addToHistory]);
+
+    const incrementQProbe = useCallback(() => {
         addToHistory('qProbe', qProbe + 1, qProbe);
         setQProbe(prev => prev + 1);
-    };
-    const incrementRespShort = () => {
+    }, [qProbe, addToHistory]);
+
+    const incrementRespShort = useCallback(() => {
         addToHistory('respShort', respShort + 1, respShort);
         setRespShort(prev => prev + 1);
-    };
-    const incrementRespExtended = () => {
+    }, [respShort, addToHistory]);
+
+    const incrementRespExtended = useCallback(() => {
         addToHistory('respExtended', respExtended + 1, respExtended);
         setRespExtended(prev => prev + 1);
-    };
-    const incrementRespPeer = () => {
+    }, [respExtended, addToHistory]);
+
+    const incrementRespPeer = useCallback(() => {
         addToHistory('respPeer', respPeer + 1, respPeer);
         setRespPeer(prev => prev + 1);
-    };
-    const incrementCodeSwitching = () => {
+    }, [respPeer, addToHistory]);
+
+    const incrementCodeSwitching = useCallback(() => {
         addToHistory('codeSwitching', codeSwitching + 1, codeSwitching);
         setCodeSwitching(prev => prev + 1);
-    };
+    }, [codeSwitching, addToHistory]);
 
     // Start observation
-    const handleStartObservation = () => {
+    const handleStartObservation = useCallback(() => {
         if (!teacherName || !subject || !gradeLevel) {
             alert('Please fill in Teacher Name, Subject, and Grade Level');
             return;
@@ -349,53 +376,45 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
         setIsObserving(true);
         setMasterTimer(0);
         setHistory([]);
-    };
-
-    // Stop observation
-    const handleStopObservation = () => {
-        setIsObserving(false);
-        setActiveTalkState(null);
-        if (masterInterval) clearInterval(masterInterval);
-        if (talkTimeInterval.current) clearInterval(talkTimeInterval.current);
-    };
+    }, [teacherName, subject, gradeLevel]);
 
     // Wait time hold handlers
-    const handleWaitTimeStart = () => {
+    const handleWaitTimeStart = useCallback(() => {
         waitTimeStartRef.current = Date.now();
         setIsHoldingWaitTime(true);
-    };
+    }, []);
 
-    const handleWaitTimeEnd = () => {
+    const handleWaitTimeEnd = useCallback(() => {
         if (waitTimeStartRef.current) {
             const elapsed = (Date.now() - waitTimeStartRef.current) / 1000;
             setWaitTimes(prev => [...prev, elapsed]);
             waitTimeStartRef.current = null;
         }
         setIsHoldingWaitTime(false);
-    };
+    }, []);
 
     // Toggle formative tag
-    const toggleTag = (tag: string) => {
+    const toggleTag = useCallback((tag: string) => {
         setSelectedTags(prev =>
             prev.includes(tag)
                 ? prev.filter(t => t !== tag)
                 : [...prev, tag]
         );
-    };
+    }, []);
 
     // Save to localStorage for offline
-    const saveToLocalStorage = (data: ObservationData) => {
+    const saveToLocalStorage = useCallback((data: ObservationData) => {
         const pending = JSON.parse(localStorage.getItem('pending_observations') || '[]');
         pending.push({ ...data, savedAt: new Date().toISOString() });
         localStorage.setItem('pending_observations', JSON.stringify(pending));
-    };
+    }, []);
 
     // Attempt to sync pending observations
-    const syncPendingObservations = async () => {
+    const syncPendingObservations = useCallback(async () => {
         const pending = JSON.parse(localStorage.getItem('pending_observations') || '[]');
         if (pending.length === 0) return;
 
-        const remaining: any[] = [];
+        const remaining: ObservationData[] = [];
         for (const obs of pending) {
             try {
                 const { error } = await supabase.from('observations').insert(obs);
@@ -405,17 +424,17 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
             }
         }
         localStorage.setItem('pending_observations', JSON.stringify(remaining));
-    };
+    }, []);
 
     // Try to sync on mount if online
     useEffect(() => {
         if (navigator.onLine) {
             syncPendingObservations();
         }
-    }, []);
+    }, [syncPendingObservations]);
 
     // Submit observation
-    const handleSubmit = async () => {
+    const handleSubmit = useCallback(async () => {
         setIsSubmitting(true);
         setSubmitError(null);
 
@@ -478,7 +497,7 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
             await syncPendingObservations();
 
             setSubmitSuccess(true);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error submitting:', err);
             // Try to save locally on error
             saveToLocalStorage(observationData);
@@ -487,10 +506,19 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
         } finally {
             setIsSubmitting(false);
         }
-    };
+    }, [
+        teacherName, subject, gradeLevel, schoolName,
+        objectiveClear, keyConcept, studentUnderstanding,
+        masterTimer, timeTeacherTalking, timeStudentTalking, timeSilence, avgWaitTime,
+        qClosed, qOpen, qProbe,
+        respShort, respExtended, respPeer,
+        codeSwitching,
+        selectedTags, verbatimQuotes,
+        saveToLocalStorage, syncPendingObservations
+    ]);
 
     // Reset form
-    const handleReset = () => {
+    const handleReset = useCallback(() => {
         setTeacherName('');
         setSubject('');
         setGradeLevel('');
@@ -520,24 +548,26 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
         setOfflineMode(false);
         if (masterInterval) clearInterval(masterInterval);
         if (talkTimeInterval.current) clearInterval(talkTimeInterval.current);
-    };
+    }, [masterInterval]);
 
     // Success screen
     if (submitSuccess) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-teal-50 to-slate-100 flex items-center justify-center p-4">
-                <div className="glass card max-w-md w-full text-center animate-in fade-in zoom-in duration-500">
-                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        {offlineMode ? <WifiOff className="w-10 h-10 text-orange-500" /> : <CheckCircle className="w-10 h-10 text-green-600" />}
+            <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--bg-primary)' }}>
+                <div className="card max-w-sm w-full text-center animate-fade-in">
+                    <div className="flex justify-center mb-6">
+                        <div className={cn('w-16 h-16 rounded-full flex items-center justify-center', offlineMode ? 'bg-amber-50' : 'bg-emerald-50')}>
+                            {offlineMode ? <WifiOff className="w-8 h-8 text-amber-600" /> : <CheckCircle className="w-8 h-8 text-emerald-600" />}
+                        </div>
                     </div>
-                    <h2 className="text-2xl font-bold text-teal-900 mb-2">
-                        {offlineMode ? 'Saved Offline!' : 'Observation Saved!'}
+                    <h2 className="text-xl font-bold mb-2">
+                        {offlineMode ? 'Saved Offline' : 'Observation Saved'}
                     </h2>
-                    <p className="text-slate-600 mb-8">
-                        {masterTimer > 0 ? `Recorded ${formatTime(masterTimer)} of observation data` : 'Observation data has been saved'}
-                        {offlineMode && ' - Will sync when connected'}
+                    <p className="text-secondary text-sm mb-6">
+                        {masterTimer > 0 ? `Recorded ${formatTime(masterTimer)} of observation` : 'Observation data has been saved'}
+                        {offlineMode && ' • Will sync when connected'}
                     </p>
-                    <button onClick={handleReset} className="btn-primary w-full">
+                    <button onClick={handleReset} className="btn btn-primary btn-full">
                         New Observation
                     </button>
                 </div>
@@ -546,450 +576,392 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 pb-28">
-            {/* Header - Context Section */}
-            <header className="glass sticky top-0 z-20 px-4 py-4">
-                <div className="max-w-4xl mx-auto">
-                    <div className="flex items-center justify-between mb-4">
-                        <button onClick={onBack} className="flex items-center gap-1 text-slate-600 hover:text-teal-700">
-                            <ChevronLeft className="w-5 h-5" />
-                            <span>Exit</span>
+        <div className="min-h-screen pb-24">
+            {/* Header */}
+            <header className="header">
+                <div className="header-content">
+                    <button onClick={onBack} className="btn btn-secondary btn-icon">
+                        <ChevronLeft size={18} />
+                    </button>
+
+                    <div className="flex items-center gap-3">
+                        {offlineMode && (
+                            <span className="badge badge-warning">
+                                <WifiOff size={12} className="mr-1" />
+                                Offline
+                            </span>
+                        )}
+                        <span className="text-sm font-medium text-accent">{observerName}</span>
+                    </div>
+                </div>
+            </header>
+
+            {/* Main content */}
+            <main className="container">
+                {!isObserving ? (
+                    <div className="space-y-4">
+                        {/* Start Button */}
+                        <button
+                            onClick={handleStartObservation}
+                            className="btn btn-primary btn-full"
+                            style={{ padding: '20px', fontSize: '16px', minHeight: '64px' }}
+                        >
+                            <Play size={24} />
+                            Start 15-Min Observation
                         </button>
-                        <div className="flex items-center gap-2">
-                            {offlineMode && (
-                                <span className="flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
-                                    <WifiOff className="w-3 h-3" />
-                                    Offline
-                                </span>
+
+                        {/* Domain 1: Learning Objective Check */}
+                        <div className="card">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-semibold mb-1">Learning Objective Visible?</h3>
+                                    <p className="text-sm text-muted">Is the learning objective clearly posted?</p>
+                                </div>
+                                <button
+                                    onClick={() => setObjectiveClear(!objectiveClear)}
+                                    className={cn('toggle', objectiveClear && 'active')}
+                                >
+                                    <div className="toggle-thumb" />
+                                </button>
+                            </div>
+                            {objectiveClear && (
+                                <input
+                                    type="text"
+                                    value={keyConcept}
+                                    onChange={(e) => setKeyConcept(e.target.value)}
+                                    placeholder="Key concept/topic..."
+                                    className="input mt-4"
+                                />
                             )}
-                            <div className="text-sm font-medium text-slate-500">
-                                <span className="text-teal-700">{observerName}</span>
+                        </div>
+
+                        {/* Domain 2: Student Understanding Check */}
+                        <div className="card">
+                            <h3 className="font-semibold mb-1">Student Understanding Check</h3>
+                            <p className="text-sm text-muted mb-4">Ask a student: "What are you learning today?"</p>
+                            <div className="grid grid-3">
+                                {UNDERSTANDING_OPTIONS.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        onClick={() => setStudentUnderstanding(option.value)}
+                                        className={cn('tally-btn', studentUnderstanding === option.value && 'active')}
+                                    >
+                                        <span className="text-2xl">{option.value === 'None' ? '🤷' : option.value === 'Task' ? '📝' : '💡'}</span>
+                                        <span className="tally-label text-center">{option.label}</span>
+                                    </button>
+                                ))}
                             </div>
                         </div>
-                    </div>
 
-                    {!isObserving ? (
-                        <div className="space-y-4">
-                            {/* Teacher Info - First Page Only */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Class Information */}
+                        <div className="card">
+                            <h3 className="font-semibold mb-4">Class Information</h3>
+                            <div className="space-y-4">
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">Teacher Name</label>
+                                    <label className="block text-sm font-medium text-secondary mb-2">Teacher Name</label>
                                     <input
                                         type="text"
                                         value={teacherName}
                                         onChange={(e) => setTeacherName(e.target.value)}
-                                        placeholder="Enter name"
-                                        className="input-field text-sm"
+                                        placeholder="Enter teacher name"
+                                        className="input"
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">Subject</label>
-                                    <select
-                                        value={subject}
-                                        onChange={(e) => setSubject(e.target.value)}
-                                        className="input-field text-sm"
-                                    >
-                                        <option value="">Select</option>
-                                        {subjects.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
+                                <div className="grid grid-2">
+                                    <div>
+                                        <label className="block text-sm font-medium text-secondary mb-2">Subject</label>
+                                        <select
+                                            value={subject}
+                                            onChange={(e) => setSubject(e.target.value)}
+                                            className="input"
+                                        >
+                                            <option value="">Select subject</option>
+                                            {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-secondary mb-2">Grade Level</label>
+                                        <select
+                                            value={gradeLevel}
+                                            onChange={(e) => setGradeLevel(e.target.value)}
+                                            className="input"
+                                        >
+                                            <option value="">Select grade</option>
+                                            {GRADE_LEVELS.map(g => <option key={g} value={g}>{g}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">Grade Level</label>
+                                    <label className="block text-sm font-medium text-secondary mb-2">School</label>
                                     <select
-                                        value={gradeLevel}
-                                        onChange={(e) => setGradeLevel(e.target.value)}
-                                        className="input-field text-sm"
+                                        value={schoolName}
+                                        onChange={(e) => setSchoolName(e.target.value)}
+                                        className="input"
                                     >
-                                        <option value="">Select</option>
-                                        {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
+                                        <option value="">Select school</option>
+                                        {SCHOOLS.map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
-                                </div>
-                            </div>
-
-                            {/* School for M&E */}
-                            <div className="mt-3">
-                                <label className="block text-xs font-medium text-slate-600 mb-1">School</label>
-                                <select
-                                    value={schoolName}
-                                    onChange={(e) => setSchoolName(e.target.value)}
-                                    className="input-field text-sm"
-                                >
-                                    <option value="">Select School</option>
-                                    {schools.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                            <div className="text-sm flex flex-wrap items-center gap-1">
-                                <span className="font-semibold text-cyan-900">{teacherName}</span>
-                                <span className="text-slate-400 hidden sm:inline">•</span>
-                                <span className="text-slate-600">{subject}</span>
-                                <span className="text-slate-400 hidden sm:inline">•</span>
-                                <span className="text-slate-600">{gradeLevel}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                {/* Undo Button */}
-                                {history.length > 0 && (
-                                    <button
-                                        onClick={handleUndo}
-                                        className="flex items-center gap-1 px-3 py-1 bg-slate-200 hover:bg-slate-300 rounded-full text-sm text-slate-700"
-                                    >
-                                        <Undo2 className="w-4 h-4" />
-                                        <span className="hidden sm:inline">Undo</span>
-                                    </button>
-                                )}
-                                <div className="text-xl sm:text-2xl font-mono font-bold text-cyan-700 timer-display">
-                                    {formatTime(masterTimer)}
                                 </div>
                             </div>
                         </div>
-                    )}
-                </div>
-            </header>
-
-            <main className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 sm:space-y-4 pb-24">
-                {/* Start/Stop Button */}
-                {!isObserving ? (
-                    <button
-                        onClick={handleStartObservation}
-                        className="w-full py-6 bg-teal-700 hover:bg-teal-800 text-white text-xl font-bold rounded-2xl shadow-lg flex items-center justify-center gap-3 transition-all active:scale-95"
-                    >
-                        <Play className="w-6 h-6" />
-                        Start 15-Min Observation
-                    </button>
-                ) : (
-                    <button
-                        onClick={handleStopObservation}
-                        className="w-full py-4 bg-red-600 hover:bg-red-700 text-white text-lg font-bold rounded-2xl shadow-lg flex items-center justify-center gap-3 transition-all active:scale-95"
-                    >
-                        <Square className="w-5 h-5" />
-                        End Observation
-                    </button>
-                )}
-
-                {/* Section 1: Talk-Time Tracker - Lavender/Blue Pastel */}
-                <section className="glass card bg-gradient-to-br from-indigo-50/80 to-blue-50/80 border-indigo-100">
-                    <h3 className="section-header">
-                        <Clock className="w-5 h-5 text-indigo-600" />
-                        Talk-Time Tracker
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <button
-                            onClick={() => setActiveTalkState('teacher')}
-                            disabled={!isObserving}
-                            className={`py-6 rounded-xl text-center transition-all active:scale-95 ${activeTalkState === 'teacher'
-                                ? 'bg-blue-600 text-white shadow-lg'
-                                : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
-                                } ${!isObserving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            <div className="text-3xl mb-1">🗣️</div>
-                            <div className="font-bold">Teacher Talk</div>
-                            <div className="text-sm opacity-80">{formatTime(timeTeacherTalking)}</div>
-                        </button>
-                        <button
-                            onClick={() => setActiveTalkState('silence')}
-                            disabled={!isObserving}
-                            className={`py-6 rounded-xl text-center transition-all active:scale-95 ${activeTalkState === 'silence'
-                                ? 'bg-orange-500 text-white shadow-lg'
-                                : 'bg-orange-50 text-orange-800 hover:bg-orange-100'
-                                } ${!isObserving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            <div className="text-3xl mb-1">⏳</div>
-                            <div className="font-bold">Silence/Work</div>
-                            <div className="text-sm opacity-80">{formatTime(timeSilence)}</div>
-                        </button>
-                        <button
-                            onClick={() => setActiveTalkState('student')}
-                            disabled={!isObserving}
-                            className={`py-6 rounded-xl text-center transition-all active:scale-95 ${activeTalkState === 'student'
-                                ? 'bg-green-600 text-white shadow-lg'
-                                : 'bg-green-50 text-green-800 hover:bg-green-100'
-                                } ${!isObserving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            <div className="text-3xl mb-1">💬</div>
-                            <div className="font-bold">Student Talk</div>
-                            <div className="text-sm opacity-80">{formatTime(timeStudentTalking)}</div>
-                        </button>
                     </div>
-                </section>
-
-                {/* Domain Checks - Only during observation */}
-                {isObserving && (
-                    <section className="glass card bg-gradient-to-br from-blue-50/80 to-cyan-50/80 border-blue-100">
-                        <h3 className="section-header">
-                            <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                            Quick Checks
-                        </h3>
-
-                        {/* Domain 1: Learning Objective */}
-                        <div className="mb-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="font-semibold text-slate-700">Learning Objective Clear?</span>
-                                {objectiveClear && (
-                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
-                                        ✓ Yes
-                                    </span>
-                                )}
+                ) : (
+                    <div className="space-y-4">
+                        {/* Active Observation Header */}
+                        <div className="card">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="font-bold text-lg">{teacherName}</h2>
+                                    <p className="text-secondary">{subject} • {gradeLevel}</p>
+                                </div>
+                                <div className="timer">{formatTime(masterTimer)}</div>
                             </div>
-                            <div className="flex items-center justify-between mb-3">
+                        </div>
+
+                        {/* End Observation Button */}
+                        <button
+                            onClick={handleStopObservation}
+                            className="btn btn-full"
+                            style={{ background: 'var(--error)', color: 'white', padding: '16px' }}
+                        >
+                            <Square size={20} />
+                            End Observation
+                        </button>
+
+                        {/* Domain Checks - During Observation */}
+                        <div className="card">
+                            <h3 className="font-semibold mb-4">Quick Checks</h3>
+
+                            {/* Domain 1: Learning Objective */}
+                            <div className="mb-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="font-medium text-sm">Learning Objective Visible?</span>
+                                    {objectiveClear && (
+                                        <span className="badge badge-success">Yes</span>
+                                    )}
+                                </div>
                                 <button
                                     onClick={() => setObjectiveClear(!objectiveClear)}
-                                    className={`w-16 h-8 rounded-full transition-all ${objectiveClear ? 'bg-cyan-600 shadow-md' : 'bg-slate-300'}`}
+                                    className={cn('toggle', objectiveClear && 'active')}
                                 >
-                                    <div className={`w-6 h-6 bg-white rounded-full shadow transform transition-transform ${objectiveClear ? 'translate-x-9' : 'translate-x-1'}`} />
+                                    <div className="toggle-thumb" />
                                 </button>
-                            </div>
-                            {objectiveClear && (
-                                <div className="mt-2">
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        Key Concept/Objective Text
-                                    </label>
+                                {objectiveClear && (
                                     <input
                                         type="text"
                                         value={keyConcept}
                                         onChange={(e) => setKeyConcept(e.target.value)}
-                                        placeholder="e.g., 'Multiplying fractions' or paste full objective"
-                                        className="input-field text-sm"
+                                        placeholder="Key concept..."
+                                        className="input mt-3"
                                     />
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Domain 2: Student Understanding */}
-                        <div className="border-t border-blue-200 pt-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="text-sm font-semibold text-slate-700">
-                                    Ask student: "What are you learning?"
-                                </div>
-                                {studentUnderstanding && (
-                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
-                                        ✓ Recorded
-                                    </span>
                                 )}
                             </div>
-                            <div className="flex gap-2">
-                                {(['None', 'Task', 'Concept'] as const).map((option) => (
-                                    <button
-                                        key={option}
-                                        onClick={() => setStudentUnderstanding(option)}
-                                        className={`flex-1 py-3 px-2 rounded-lg text-sm font-medium transition-all ${studentUnderstanding === option
-                                            ? option === 'None' ? 'bg-red-500 text-white shadow-md'
-                                                : option === 'Task' ? 'bg-amber-500 text-white shadow-md'
-                                                    : 'bg-emerald-500 text-white shadow-md'
-                                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                            }`}
-                                    >
-                                        <div className="flex flex-col items-center gap-1">
-                                            <span>{option === 'None' ? '🤷' : option === 'Task' ? '📝' : '💡'}</span>
-                                            <span>{option === 'None' ? "Couldn't Explain"
-                                                : option === 'Task' ? 'Explained Task'
-                                                    : 'Explained Concept'}</span>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-                )}
 
-                {/* Section 2: Action Board */}
-                {isObserving && (
-                    <>
-                        {/* Group A: Teacher Questions - Coral/Orange Pastel */}
-                        <section className="glass card bg-gradient-to-br from-rose-50/80 to-orange-50/80 border-rose-100">
-                            <h3 className="section-header">
-                                <span className="w-3 h-3 bg-rose-500 rounded-full"></span>
-                                Teacher Questions
-                            </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <button
-                                    onClick={incrementQClosed}
-                                    className="py-5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-center transition-all active:scale-95"
-                                >
-                                    <div className="font-bold text-sm mb-1">+1 Closed/Recall</div>
-                                    <div className="text-xs opacity-70">(What/Who)</div>
-                                    <div className="text-2xl font-bold text-blue-600 mt-2">{qClosed}</div>
-                                </button>
-                                <button
-                                    onClick={incrementQOpen}
-                                    className="py-5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-center transition-all active:scale-95"
-                                >
-                                    <div className="font-bold text-sm mb-1">+1 Open/Explain</div>
-                                    <div className="text-xs opacity-70">(Why/How)</div>
-                                    <div className="text-2xl font-bold text-blue-600 mt-2">{qOpen}</div>
-                                </button>
-                                <button
-                                    onClick={incrementQProbe}
-                                    className="py-5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-center transition-all active:scale-95"
-                                >
-                                    <div className="font-bold text-sm mb-1">+1 Probe</div>
-                                    <div className="text-xs opacity-70">("How do you know?")</div>
-                                    <div className="text-2xl font-bold text-blue-600 mt-2">{qProbe}</div>
-                                </button>
-                            </div>
-                        </section>
-
-                        {/* Group B: Student Responses - Mint Green Pastel */}
-                        <section className="glass card bg-gradient-to-br from-emerald-50/80 to-teal-50/80 border-emerald-100">
-                            <h3 className="section-header">
-                                <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                                Student Responses
-                            </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <button
-                                    onClick={incrementRespShort}
-                                    className="py-5 bg-green-50 hover:bg-green-100 text-green-800 rounded-xl text-center transition-all active:scale-95"
-                                >
-                                    <div className="font-bold text-sm mb-1">+1 Short Answer</div>
-                                    <div className="text-xs opacity-70">(1-2 words)</div>
-                                    <div className="text-2xl font-bold text-green-600 mt-2">{respShort}</div>
-                                </button>
-                                <button
-                                    onClick={incrementRespExtended}
-                                    className="py-5 bg-green-50 hover:bg-green-100 text-green-800 rounded-xl text-center transition-all active:scale-95"
-                                >
-                                    <div className="font-bold text-sm mb-1">+1 Academic Sentence</div>
-                                    <div className="text-xs opacity-70">(Extended answer)</div>
-                                    <div className="text-2xl font-bold text-green-600 mt-2">{respExtended}</div>
-                                </button>
-                                <button
-                                    onClick={incrementRespPeer}
-                                    className="py-5 bg-green-50 hover:bg-green-100 text-green-800 rounded-xl text-center transition-all active:scale-95"
-                                >
-                                    <div className="font-bold text-sm mb-1">+1 Peer-to-Peer</div>
-                                    <div className="text-xs opacity-70">(Student → Student)</div>
-                                    <div className="text-2xl font-bold text-green-600 mt-2">{respPeer}</div>
-                                </button>
-                            </div>
-                        </section>
-
-                        {/* Group C: Wait Time & Environment - Yellow/Gold Pastel */}
-                        <section className="glass card bg-gradient-to-br from-amber-50/80 to-yellow-50/80 border-amber-100">
-                            <h3 className="section-header">
-                                <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
-                                Wait Time & Environment
-                            </h3>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        onClick={incrementCodeSwitching}
-                                        className="py-4 bg-orange-50 hover:bg-orange-100 text-orange-800 rounded-xl text-center transition-all active:scale-95 flex items-center justify-center gap-2"
-                                    >
-                                        <div className="text-left">
-                                            <div className="font-bold">+1 Code-Switch</div>
-                                            <div className="text-xs opacity-70">EN↔MS</div>
-                                        </div>
-                                        <div className="text-2xl font-bold text-orange-600">{codeSwitching}</div>
-                                    </button>
-                                    <div className="py-4 bg-slate-100 rounded-xl text-center">
-                                        <div className="text-sm text-slate-600 mb-1">Avg Wait Time</div>
-                                        <div className="text-2xl font-bold text-slate-800">{avgWaitTime.toFixed(1)}s</div>
-                                        <div className="text-xs text-slate-500">{waitTimes.length} samples</div>
-                                    </div>
+                            {/* Domain 2: Student Understanding */}
+                            <div className="border-top-subtle" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="font-medium text-sm">Ask student: "What are you learning?"</span>
+                                    {studentUnderstanding && (
+                                        <span className="badge badge-success">Recorded</span>
+                                    )}
                                 </div>
+                                <div className="grid grid-3">
+                                    {UNDERSTANDING_OPTIONS.map((option) => (
+                                        <button
+                                            key={option.value}
+                                            onClick={() => setStudentUnderstanding(option.value)}
+                                            className={cn('tally-btn', studentUnderstanding === option.value && 'active')}
+                                            style={{ minHeight: '64px' }}
+                                        >
+                                            <span className="text-xl">{option.value === 'None' ? '🤷' : option.value === 'Task' ? '📝' : '💡'}</span>
+                                            <span className="tally-label text-xs">{option.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
 
-                                {/* Wait Time Hold Button */}
+                        {/* Section 1: Talk-Time Tracker */}
+                        <section className="card">
+                            <h3 className="font-semibold flex items-center gap-2 mb-4">
+                                <Clock size={18} className="text-accent" />
+                                Talk-Time Tracker
+                            </h3>
+                            <div className="grid grid-3">
                                 <button
-                                    onMouseDown={handleWaitTimeStart}
-                                    onMouseUp={handleWaitTimeEnd}
-                                    onMouseLeave={() => isHoldingWaitTime && handleWaitTimeEnd()}
-                                    onTouchStart={handleWaitTimeStart}
-                                    onTouchEnd={handleWaitTimeEnd}
-                                    className={`w-full py-6 rounded-xl text-lg font-bold transition-all active:scale-95 flex items-center justify-center gap-3 ${isHoldingWaitTime
-                                        ? 'bg-orange-600 text-white shadow-lg animate-pulse'
-                                        : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
-                                        }`}
+                                    onClick={() => setActiveTalkState('teacher')}
+                                    className={cn('tally-btn', activeTalkState === 'teacher' && 'active')}
                                 >
-                                    <Clock className="w-6 h-6" />
-                                    {isHoldingWaitTime ? 'Release when someone speaks...' : 'Hold for Wait Time'}
+                                    <span className="text-2xl">🗣️</span>
+                                    <span className="tally-label">Teacher</span>
+                                    <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeTeacherTalking)}</span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTalkState('silence')}
+                                    className={cn('tally-btn', activeTalkState === 'silence' && 'active')}
+                                >
+                                    <span className="text-2xl">⏳</span>
+                                    <span className="tally-label">Silence/Work</span>
+                                    <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeSilence)}</span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTalkState('student')}
+                                    className={cn('tally-btn', activeTalkState === 'student' && 'active')}
+                                >
+                                    <span className="text-2xl">💬</span>
+                                    <span className="tally-label">Student</span>
+                                    <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeStudentTalking)}</span>
                                 </button>
                             </div>
                         </section>
-                    </>
-                )}
 
-                {/* Section 3: Qualitative Evidence - Purple/Violet Pastel */}
-                {isObserving && (
-                    <section className="glass card bg-gradient-to-br from-violet-50/80 to-purple-50/80 border-violet-100">
-                        <h3 className="section-header">
-                            <MessageCircle className="w-5 h-5 text-violet-600" />
-                            Qualitative Evidence
-                        </h3>
-
-                        {/* Formative Tags */}
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-slate-600 mb-2">
-                                Formative Methods Observed
-                                <span className="ml-2 px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded-full text-xs font-bold">
-                                    {selectedTags.length}
-                                </span>
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                                {formativeTags.map(tag => (
-                                    <button
-                                        key={tag}
-                                        onClick={() => toggleTag(tag)}
-                                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${selectedTags.includes(tag)
-                                            ? 'bg-cyan-600 text-white shadow-md'
-                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                            }`}
-                                    >
-                                        {tag}
-                                        {selectedTags.includes(tag) && (
-                                            <span className="ml-1">✓</span>
-                                        )}
+                        {/* Section 2: Teacher Questions */}
+                        <section className="card">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold">Teacher Questions</h3>
+                                {history.length > 0 && (
+                                    <button onClick={handleUndo} className="btn btn-secondary text-xs">
+                                        <Undo2 size={14} />
+                                        Undo
                                     </button>
-                                ))}
+                                )}
                             </div>
-                        </div>
+                            <div className="grid grid-3">
+                                <button onClick={incrementQClosed} className="tally-btn">
+                                    <span className="tally-count">{qClosed}</span>
+                                    <span className="tally-label">Closed</span>
+                                    <span className="tally-sublabel">What/Who</span>
+                                </button>
+                                <button onClick={incrementQOpen} className="tally-btn">
+                                    <span className="tally-count">{qOpen}</span>
+                                    <span className="tally-label">Open</span>
+                                    <span className="tally-sublabel">Why/How</span>
+                                </button>
+                                <button onClick={incrementQProbe} className="tally-btn">
+                                    <span className="tally-count">{qProbe}</span>
+                                    <span className="tally-label">Probe</span>
+                                    <span className="tally-sublabel">"How do you know?"</span>
+                                </button>
+                            </div>
+                        </section>
 
-                        {/* Verbatim Quotes */}
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">
-                                Exact Quotes
-                                <span className="ml-2 px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded-full text-xs font-bold">
-                                    {verbatimQuotes.split('\n').filter(q => q.trim().length > 0).length}
-                                </span>
-                                <span className="font-normal text-slate-400 ml-2">(Use keyboard mic to dictate)</span>
-                            </label>
-                            <textarea
-                                value={verbatimQuotes}
-                                onChange={(e) => setVerbatimQuotes(e.target.value)}
-                                placeholder="Type or dictate notable quotes here..."
-                                className="input-field min-h-[100px] resize-none"
-                            />
-                        </div>
-                    </section>
-                )}
+                        {/* Section 3: Student Responses */}
+                        <section className="card">
+                            <h3 className="font-semibold mb-4">Student Responses</h3>
+                            <div className="grid grid-3">
+                                <button onClick={incrementRespShort} className="tally-btn">
+                                    <span className="tally-count">{respShort}</span>
+                                    <span className="tally-label">Short</span>
+                                    <span className="tally-sublabel">1-2 words</span>
+                                </button>
+                                <button onClick={incrementRespExtended} className="tally-btn">
+                                    <span className="tally-count">{respExtended}</span>
+                                    <span className="tally-label">Academic</span>
+                                    <span className="tally-sublabel">Full sentence</span>
+                                </button>
+                                <button onClick={incrementRespPeer} className="tally-btn">
+                                    <span className="tally-count">{respPeer}</span>
+                                    <span className="tally-label">Peer</span>
+                                    <span className="tally-sublabel">Student → Student</span>
+                                </button>
+                            </div>
+                        </section>
 
-                {/* Submit Button */}
-                {isObserving && masterTimer > 0 && (
-                    <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-sm border-t border-slate-200">
-                        <div className="max-w-4xl mx-auto">
-                            {submitError && (
-                                <div className="mb-3 p-3 bg-orange-50 text-orange-700 rounded-lg flex items-center gap-2">
-                                    <AlertCircle className="w-5 h-5" />
-                                    {submitError}
+                        {/* Section 4: Wait Time & Environment */}
+                        <section className="card">
+                            <h3 className="font-semibold mb-4">Wait Time & Environment</h3>
+                            <div className="grid grid-2 gap-4">
+                                <button onClick={incrementCodeSwitching} className="tally-btn">
+                                    <span className="tally-count">{codeSwitching}</span>
+                                    <span className="tally-label">Code-Switch</span>
+                                    <span className="tally-sublabel">EN ↔ MS</span>
+                                </button>
+                                <div className="tally-btn" style={{ cursor: 'default' }}>
+                                    <span className="tally-count">{avgWaitTime.toFixed(1)}s</span>
+                                    <span className="tally-label">Avg Wait Time</span>
+                                    <span className="tally-sublabel">{waitTimes.length} samples</span>
                                 </div>
-                            )}
+                            </div>
                             <button
-                                onClick={handleSubmit}
-                                disabled={isSubmitting}
-                                className="w-full py-4 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-400 text-white text-lg font-bold rounded-xl shadow-lg flex items-center justify-center gap-3 transition-all"
+                                onMouseDown={handleWaitTimeStart}
+                                onMouseUp={handleWaitTimeEnd}
+                                onMouseLeave={() => isHoldingWaitTime && handleWaitTimeEnd()}
+                                onTouchStart={handleWaitTimeStart}
+                                onTouchEnd={handleWaitTimeEnd}
+                                className={cn('btn btn-full', isHoldingWaitTime && 'btn-primary')}
+                                style={{ marginTop: '16px', minHeight: '56px' }}
                             >
-                                {isSubmitting ? (
-                                    <>Submitting...</>
-                                ) : (
-                                    <>
-                                        End & Submit to Database
-                                    </>
-                                )}
+                                <Clock size={20} />
+                                {isHoldingWaitTime ? 'Release when someone speaks...' : 'Hold for Wait Time'}
                             </button>
-                        </div>
+                        </section>
+
+                        {/* Section 5: Qualitative Evidence */}
+                        <section className="card">
+                            <h3 className="font-semibold flex items-center gap-2 mb-4">
+                                <MessageCircle size={18} className="text-accent" />
+                                Qualitative Evidence
+                            </h3>
+
+                            {/* Formative Tags */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-secondary mb-3">
+                                    Formative Methods
+                                    <span className="badge badge-accent ml-2">{selectedTags.length}</span>
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {FORMATIVE_TAGS.map(tag => (
+                                        <button
+                                            key={tag}
+                                            onClick={() => toggleTag(tag)}
+                                            className={cn('tag', selectedTags.includes(tag) && 'active')}
+                                        >
+                                            {tag}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Verbatim Quotes */}
+                            <div>
+                                <label className="block text-sm font-medium text-secondary mb-3">
+                                    Exact Quotes
+                                    <span className="badge badge-neutral ml-2">
+                                        {verbatimQuotes.split('\n').filter(q => q.trim().length > 0).length}
+                                    </span>
+                                </label>
+                                <textarea
+                                    value={verbatimQuotes}
+                                    onChange={(e) => setVerbatimQuotes(e.target.value)}
+                                    placeholder="Type or dictate notable quotes here..."
+                                    className="input"
+                                    style={{ minHeight: '100px', resize: 'none' }}
+                                />
+                            </div>
+                        </section>
                     </div>
                 )}
             </main>
+
+            {/* Submit Button - Fixed Bottom */}
+            {isObserving && masterTimer > 0 && (
+                <div className="bottom-sheet">
+                    {submitError && (
+                        <div className="flex items-center gap-2 p-3 mb-4 bg-amber-50 border border-amber-200 rounded-lg">
+                            <AlertCircle size={18} className="text-amber-600" />
+                            <span className="text-sm text-amber-800">{submitError}</span>
+                        </div>
+                    )}
+                    <button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="btn btn-primary btn-full"
+                        style={{ minHeight: '48px' }}
+                    >
+                        {isSubmitting ? 'Submitting...' : 'End & Submit to Database'}
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
