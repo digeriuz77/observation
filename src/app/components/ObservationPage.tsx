@@ -469,12 +469,19 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                     {!isObserving ? (
                         <div className="space-y-4">
                             {/* Domain 1: Learning Objective Check */}
-                            <div className="bg-blue-50 rounded-xl p-4">
+                            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-100">
                                 <div className="flex items-center justify-between">
-                                    <span className="font-medium text-slate-700">Objective Visible on Board?</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-slate-700">Objective Visible on Board?</span>
+                                        {objectiveVisible && (
+                                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
+                                                ✓ Yes
+                                            </span>
+                                        )}
+                                    </div>
                                     <button
                                         onClick={() => setObjectiveVisible(!objectiveVisible)}
-                                        className={`w-16 h-8 rounded-full transition-all ${objectiveVisible ? 'bg-teal-600' : 'bg-slate-300'
+                                        className={`w-16 h-8 rounded-full transition-all ${objectiveVisible ? 'bg-cyan-600 shadow-md' : 'bg-slate-300'
                                             }`}
                                     >
                                         <div className={`w-6 h-6 bg-white rounded-full shadow transform transition-transform ${objectiveVisible ? 'translate-x-9' : 'translate-x-1'
@@ -484,25 +491,35 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                             </div>
 
                             {/* Domain 2: Student Understanding Check */}
-                            <div className="bg-green-50 rounded-xl p-4">
-                                <div className="text-sm font-medium text-slate-700 mb-3">
-                                    Ask student: "What are you learning?"
+                            <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl p-4 border border-emerald-100">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="text-sm font-semibold text-slate-700">
+                                        Ask student: "What are you learning?"
+                                    </div>
+                                    {studentWhisperCheck && (
+                                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
+                                            ✓ Recorded
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="flex gap-2">
                                     {(['None', 'Task', 'Concept'] as const).map((option) => (
                                         <button
                                             key={option}
                                             onClick={() => setStudentWhisperCheck(option)}
-                                            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${studentWhisperCheck === option
-                                                ? option === 'None' ? 'bg-red-500 text-white'
-                                                    : option === 'Task' ? 'bg-yellow-500 text-white'
-                                                        : 'bg-green-500 text-white'
-                                                : 'bg-white text-slate-600 hover:bg-slate-100'
+                                            className={`flex-1 py-3 px-2 rounded-lg text-sm font-medium transition-all ${studentWhisperCheck === option
+                                                ? option === 'None' ? 'bg-red-500 text-white shadow-md'
+                                                    : option === 'Task' ? 'bg-amber-500 text-white shadow-md'
+                                                        : 'bg-emerald-500 text-white shadow-md'
+                                                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                                                 }`}
                                         >
-                                            {option === 'None' ? "Couldn't Explain"
-                                                : option === 'Task' ? 'Explained Task'
-                                                    : 'Explained Concept'}
+                                            <div className="flex flex-col items-center gap-1">
+                                                <span>{option === 'None' ? '🤷' : option === 'Task' ? '📝' : '💡'}</span>
+                                                <span>{option === 'None' ? "Couldn't Explain"
+                                                    : option === 'Task' ? 'Explained Task'
+                                                        : 'Explained Concept'}</span>
+                                            </div>
                                         </button>
                                     ))}
                                 </div>
