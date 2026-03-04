@@ -390,6 +390,44 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
         }));
     }, []);
 
+    // Talk time reset functions
+    const resetTeacherTime = useCallback(() => {
+        setTimeTeacherTalking(0);
+        if (activeTalkState === 'teacher') setActiveTalkState(null);
+    }, [activeTalkState]);
+
+    const resetSilenceTime = useCallback(() => {
+        setTimeSilence(0);
+        if (activeTalkState === 'silence') setActiveTalkState(null);
+    }, [activeTalkState]);
+
+    const resetStudentTime = useCallback(() => {
+        setTimeStudentTalking(0);
+        if (activeTalkState === 'student') setActiveTalkState(null);
+    }, [activeTalkState]);
+
+    // Reset all counters when starting observation
+    const resetAllCounters = useCallback(() => {
+        setTimeTeacherTalking(0);
+        setTimeStudentTalking(0);
+        setTimeSilence(0);
+        setQClosed(0);
+        setQOpen(0);
+        setQProbe(0);
+        setRespShort(0);
+        setRespExtended(0);
+        setRespPeer(0);
+        setCodeSwitching(0);
+        setWaitTimes([]);
+        setFormativeCounts(() => {
+            const initial: Record<string, number> = {};
+            FORMATIVE_TAGS.forEach(tag => initial[tag] = 0);
+            return initial;
+        });
+        setActiveTalkState(null);
+        setHistory([]);
+    }, []);
+
     // Start observation
     const handleStartObservation = useCallback(() => {
         if (!teacherName || !subject || !gradeLevel) {
@@ -397,8 +435,8 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
             return;
         }
         setIsObserving(true);
-        setHistory([]);
-    }, [teacherName, subject, gradeLevel]);
+        resetAllCounters();
+    }, [teacherName, subject, gradeLevel, resetAllCounters]);
 
     // Wait time hold handlers
     const handleWaitTimeStart = useCallback(() => {
@@ -764,31 +802,67 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
                                 <Clock size={18} className="text-accent" />
                                 Talk-Time Tracker
                             </h3>
-                            <div className="grid grid-3">
-                                <button
-                                    onClick={() => toggleTalkState('teacher')}
-                                    className={cn('tally-btn', activeTalkState === 'teacher' && 'active')}
-                                >
-                                    <span className="text-2xl">🗣️</span>
-                                    <span className="tally-label">Teacher</span>
-                                    <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeTeacherTalking)}</span>
-                                </button>
-                                <button
-                                    onClick={() => toggleTalkState('silence')}
-                                    className={cn('tally-btn', activeTalkState === 'silence' && 'active')}
-                                >
-                                    <span className="text-2xl">⏳</span>
-                                    <span className="tally-label">Silence/Work</span>
-                                    <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeSilence)}</span>
-                                </button>
-                                <button
-                                    onClick={() => toggleTalkState('student')}
-                                    className={cn('tally-btn', activeTalkState === 'student' && 'active')}
-                                >
-                                    <span className="text-2xl">💬</span>
-                                    <span className="tally-label">Student</span>
-                                    <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeStudentTalking)}</span>
-                                </button>
+                            <div className="grid grid-3 gap-3">
+                                <div className="relative">
+                                    <button
+                                        onClick={() => toggleTalkState('teacher')}
+                                        className={cn('tally-btn w-full', activeTalkState === 'teacher' && 'active')}
+                                    >
+                                        <span className="text-2xl">🗣️</span>
+                                        <span className="tally-label">Teacher</span>
+                                        <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeTeacherTalking)}</span>
+                                    </button>
+                                    {timeTeacherTalking > 0 && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); resetTeacherTime(); }}
+                                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center"
+                                            style={{ fontSize: '10px', lineHeight: 1 }}
+                                            title="Reset"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => toggleTalkState('silence')}
+                                        className={cn('tally-btn w-full', activeTalkState === 'silence' && 'active')}
+                                    >
+                                        <span className="text-2xl">⏳</span>
+                                        <span className="tally-label">Silence/Work</span>
+                                        <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeSilence)}</span>
+                                    </button>
+                                    {timeSilence > 0 && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); resetSilenceTime(); }}
+                                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center"
+                                            style={{ fontSize: '10px', lineHeight: 1 }}
+                                            title="Reset"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => toggleTalkState('student')}
+                                        className={cn('tally-btn w-full', activeTalkState === 'student' && 'active')}
+                                    >
+                                        <span className="text-2xl">💬</span>
+                                        <span className="tally-label">Student</span>
+                                        <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeStudentTalking)}</span>
+                                    </button>
+                                    {timeStudentTalking > 0 && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); resetStudentTime(); }}
+                                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center"
+                                            style={{ fontSize: '10px', lineHeight: 1 }}
+                                            title="Reset"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </section>
 
