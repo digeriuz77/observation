@@ -508,7 +508,7 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">Teacher Name</label>
                                     <input
@@ -544,7 +544,7 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                             </div>
 
                             {/* Department & School for M&E */}
-                            <div className="grid grid-cols-2 gap-3 mt-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">Department</label>
                                     <select
@@ -570,12 +570,12 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                             </div>
                         </div>
                     ) : (
-                        <div className="flex items-center justify-between">
-                            <div className="text-sm">
-                                <span className="font-semibold text-teal-900">{teacherName}</span>
-                                <span className="text-slate-400 mx-2">•</span>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div className="text-sm flex flex-wrap items-center gap-1">
+                                <span className="font-semibold text-cyan-900">{teacherName}</span>
+                                <span className="text-slate-400 hidden sm:inline">•</span>
                                 <span className="text-slate-600">{subject}</span>
-                                <span className="text-slate-400 mx-2">•</span>
+                                <span className="text-slate-400 hidden sm:inline">•</span>
                                 <span className="text-slate-600">{gradeLevel}</span>
                             </div>
                             <div className="flex items-center gap-3">
@@ -586,10 +586,10 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                                         className="flex items-center gap-1 px-3 py-1 bg-slate-200 hover:bg-slate-300 rounded-full text-sm text-slate-700"
                                     >
                                         <Undo2 className="w-4 h-4" />
-                                        Undo
+                                        <span className="hidden sm:inline">Undo</span>
                                     </button>
                                 )}
-                                <div className="text-2xl font-mono font-bold text-teal-700">
+                                <div className="text-xl sm:text-2xl font-mono font-bold text-cyan-700 timer-display">
                                     {formatTime(masterTimer)}
                                 </div>
                             </div>
@@ -598,7 +598,7 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                 </div>
             </header>
 
-            <main className="max-w-4xl mx-auto px-4 py-4 space-y-4">
+            <main className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 sm:space-y-4 pb-24">
                 {/* Start/Stop Button */}
                 {!isObserving ? (
                     <button
@@ -620,11 +620,11 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
 
                 {/* Section 1: Talk-Time Tracker */}
                 <section className="glass card">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-teal-700" />
+                    <h3 className="section-header">
+                        <Clock className="w-5 h-5 text-cyan-600" />
                         Talk-Time Tracker
                     </h3>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <button
                             onClick={() => setActiveTalkState('teacher')}
                             disabled={!isObserving}
@@ -669,11 +669,11 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                     <>
                         {/* Group A: Teacher Questions */}
                         <section className="glass card">
-                            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <h3 className="section-header">
                                 <span className="w-3 h-3 bg-blue-600 rounded-full"></span>
                                 Teacher Questions
                             </h3>
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <button
                                     onClick={incrementQClosed}
                                     className="py-5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-center transition-all active:scale-95"
@@ -703,11 +703,11 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
 
                         {/* Group B: Student Responses */}
                         <section className="glass card">
-                            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <h3 className="section-header">
                                 <span className="w-3 h-3 bg-green-600 rounded-full"></span>
                                 Student Responses
                             </h3>
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <button
                                     onClick={incrementRespShort}
                                     className="py-5 bg-green-50 hover:bg-green-100 text-green-800 rounded-xl text-center transition-all active:scale-95"
@@ -737,7 +737,7 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
 
                         {/* Group C: Wait Time & Environment */}
                         <section className="glass card">
-                            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <h3 className="section-header">
                                 <span className="w-3 h-3 bg-orange-500 rounded-full"></span>
                                 Wait Time & Environment
                             </h3>
@@ -783,8 +783,8 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                 {/* Section 3: Qualitative Evidence */}
                 {isObserving && (
                     <section className="glass card">
-                        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                            <MessageCircle className="w-5 h-5 text-teal-700" />
+                        <h3 className="section-header">
+                            <MessageCircle className="w-5 h-5 text-cyan-600" />
                             Qualitative Evidence
                         </h3>
 
