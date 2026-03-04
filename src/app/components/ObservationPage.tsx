@@ -23,6 +23,7 @@ interface ObservationData {
 
     // Domain 1 & 2: Quick Checks
     objective_visible: boolean;
+    objective_concept: string;
     student_whisper_check: string;
 
     // Timers (Stored in total seconds)
@@ -50,7 +51,6 @@ interface ObservationData {
     verbatim_quotes: string;
 
     // M&E Grouping
-    department: string;
     school_name: string;
 }
 
@@ -74,13 +74,15 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
     const [subject, setSubject] = useState('');
     const [gradeLevel, setGradeLevel] = useState('');
 
-    // M&E Grouping
-    const [department, setDepartment] = useState('');
+    // Context state
     const [schoolName, setSchoolName] = useState('');
 
-    // Domain 1 & 2: Quick Checks
-    const [objectiveVisible, setObjectiveVisible] = useState(false);
-    const [studentWhisperCheck, setStudentWhisperCheck] = useState<'None' | 'Task' | 'Concept' | ''>('');
+    // Domain 1: Learning Objective Check (moved to observation page)
+    const [objectiveClear, setObjectiveClear] = useState(false);
+    const [keyConcept, setKeyConcept] = useState('');
+
+    // Domain 2: Student Understanding (moved to observation page)
+    const [studentUnderstanding, setStudentUnderstanding] = useState<'None' | 'Task' | 'Concept' | ''>('');
 
     // Observation active state
     const [isObserving, setIsObserving] = useState(false);
@@ -124,6 +126,106 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [offlineMode, setOfflineMode] = useState(false);
+
+    // Draft save indicator
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+    // LocalStorage key for this observer
+    const draftKey = `observation_draft_${observerName.replace(/\s+/g, '_')}`;
+
+    // Load draft from localStorage on mount
+    useEffect(() => {
+        try {
+            const savedDraft = localStorage.getItem(draftKey);
+            if (savedDraft) {
+                const draft = JSON.parse(savedDraft);
+                setTeacherName(draft.teacherName || '');
+                setSubject(draft.subject || '');
+                setGradeLevel(draft.gradeLevel || '');
+                setSchoolName(draft.schoolName || '');
+                setObjectiveClear(draft.objectiveClear || false);
+                setKeyConcept(draft.keyConcept || '');
+                setStudentUnderstanding(draft.studentUnderstanding || '');
+                setTimeTeacherTalking(draft.timeTeacherTalking || 0);
+                setTimeStudentTalking(draft.timeStudentTalking || 0);
+                setTimeSilence(draft.timeSilence || 0);
+                setQClosed(draft.qClosed || 0);
+                setQOpen(draft.qOpen || 0);
+                setQProbe(draft.qProbe || 0);
+                setRespShort(draft.respShort || 0);
+                setRespExtended(draft.respExtended || 0);
+                setRespPeer(draft.respPeer || 0);
+                setCodeSwitching(draft.codeSwitching || 0);
+                setWaitTimes(draft.waitTimes || []);
+                setSelectedTags(draft.selectedTags || []);
+                setVerbatimQuotes(draft.verbatimQuotes || '');
+                setMasterTimer(draft.masterTimer || 0);
+                if (draft.lastSaved) {
+                    setLastSaved(new Date(draft.lastSaved));
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load draft:', e);
+        }
+    }, [draftKey]);
+
+    // Auto-save draft to localStorage whenever data changes
+    useEffect(() => {
+        if (!isObserving && !teacherName && !subject) return; // Don't save empty drafts
+
+        const draft = {
+            teacherName,
+            subject,
+            gradeLevel,
+            schoolName,
+            objectiveClear,
+            keyConcept,
+            studentUnderstanding,
+            timeTeacherTalking,
+            timeStudentTalking,
+            timeSilence,
+            qClosed,
+            qOpen,
+            qProbe,
+            respShort,
+            respExtended,
+            respPeer,
+            codeSwitching,
+            waitTimes,
+            selectedTags,
+            verbatimQuotes,
+            masterTimer,
+            lastSaved: new Date().toISOString()
+        };
+
+        try {
+            localStorage.setItem(draftKey, JSON.stringify(draft));
+            setLastSaved(new Date());
+        } catch (e) {
+            console.error('Failed to save draft:', e);
+        }
+    }, [
+        teacherName, subject, gradeLevel, schoolName,
+        objectiveClear,
+        keyConcept,
+        studentUnderstanding,
+        timeTeacherTalking, timeStudentTalking, timeSilence,
+        qClosed, qOpen, qProbe,
+        respShort, respExtended, respPeer,
+        codeSwitching, waitTimes,
+        selectedTags, verbatimQuotes, masterTimer,
+        draftKey, isObserving
+    ]);
+
+    // Clear draft after successful submission
+    const clearDraft = () => {
+        try {
+            localStorage.removeItem(draftKey);
+            setLastSaved(null);
+        } catch (e) {
+            console.error('Failed to clear draft:', e);
+        }
+    };
 
     // Check network status
     useEffect(() => {
@@ -324,8 +426,9 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
             observed_at: new Date().toISOString(),
 
             // Domain 1 & 2
-            objective_visible: objectiveVisible,
-            student_whisper_check: studentWhisperCheck,
+            objective_visible: objectiveClear,
+            objective_concept: keyConcept,
+            student_whisper_check: studentUnderstanding,
 
             // Timers
             total_duration_seconds: masterTimer,
@@ -352,7 +455,6 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
             verbatim_quotes: verbatimQuotes,
 
             // M&E Grouping
-            department,
             school_name: schoolName,
         };
 
@@ -392,10 +494,10 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
         setTeacherName('');
         setSubject('');
         setGradeLevel('');
-        setDepartment('');
         setSchoolName('');
-        setObjectiveVisible(false);
-        setStudentWhisperCheck('');
+        setObjectiveClear(false);
+        setKeyConcept('');
+        setStudentUnderstanding('');
         setIsObserving(false);
         setMasterTimer(0);
         setActiveTalkState(null);
@@ -468,63 +570,7 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
 
                     {!isObserving ? (
                         <div className="space-y-4">
-                            {/* Domain 1: Learning Objective Check */}
-                            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-100">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-semibold text-slate-700">Objective Visible on Board?</span>
-                                        {objectiveVisible && (
-                                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
-                                                ✓ Yes
-                                            </span>
-                                        )}
-                                    </div>
-                                    <button
-                                        onClick={() => setObjectiveVisible(!objectiveVisible)}
-                                        className={`w-16 h-8 rounded-full transition-all ${objectiveVisible ? 'bg-cyan-600 shadow-md' : 'bg-slate-300'
-                                            }`}
-                                    >
-                                        <div className={`w-6 h-6 bg-white rounded-full shadow transform transition-transform ${objectiveVisible ? 'translate-x-9' : 'translate-x-1'
-                                            }`} />
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Domain 2: Student Understanding Check */}
-                            <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl p-4 border border-emerald-100">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="text-sm font-semibold text-slate-700">
-                                        Ask student: "What are you learning?"
-                                    </div>
-                                    {studentWhisperCheck && (
-                                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
-                                            ✓ Recorded
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="flex gap-2">
-                                    {(['None', 'Task', 'Concept'] as const).map((option) => (
-                                        <button
-                                            key={option}
-                                            onClick={() => setStudentWhisperCheck(option)}
-                                            className={`flex-1 py-3 px-2 rounded-lg text-sm font-medium transition-all ${studentWhisperCheck === option
-                                                ? option === 'None' ? 'bg-red-500 text-white shadow-md'
-                                                    : option === 'Task' ? 'bg-amber-500 text-white shadow-md'
-                                                        : 'bg-emerald-500 text-white shadow-md'
-                                                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                                }`}
-                                        >
-                                            <div className="flex flex-col items-center gap-1">
-                                                <span>{option === 'None' ? '🤷' : option === 'Task' ? '📝' : '💡'}</span>
-                                                <span>{option === 'None' ? "Couldn't Explain"
-                                                    : option === 'Task' ? 'Explained Task'
-                                                        : 'Explained Concept'}</span>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
+                            {/* Teacher Info - First Page Only */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">Teacher Name</label>
@@ -560,30 +606,17 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                                 </div>
                             </div>
 
-                            {/* Department & School for M&E */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">Department</label>
-                                    <select
-                                        value={department}
-                                        onChange={(e) => setDepartment(e.target.value)}
-                                        className="input-field text-sm"
-                                    >
-                                        <option value="">Select</option>
-                                        {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">School</label>
-                                    <select
-                                        value={schoolName}
-                                        onChange={(e) => setSchoolName(e.target.value)}
-                                        className="input-field text-sm"
-                                    >
-                                        <option value="">Select</option>
-                                        {schools.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
+                            {/* School for M&E */}
+                            <div className="mt-3">
+                                <label className="block text-xs font-medium text-slate-600 mb-1">School</label>
+                                <select
+                                    value={schoolName}
+                                    onChange={(e) => setSchoolName(e.target.value)}
+                                    className="input-field text-sm"
+                                >
+                                    <option value="">Select School</option>
+                                    {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
                             </div>
                         </div>
                     ) : (
@@ -635,10 +668,10 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                     </button>
                 )}
 
-                {/* Section 1: Talk-Time Tracker */}
-                <section className="glass card">
+                {/* Section 1: Talk-Time Tracker - Lavender/Blue Pastel */}
+                <section className="glass card bg-gradient-to-br from-indigo-50/80 to-blue-50/80 border-indigo-100">
                     <h3 className="section-header">
-                        <Clock className="w-5 h-5 text-cyan-600" />
+                        <Clock className="w-5 h-5 text-indigo-600" />
                         Talk-Time Tracker
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -681,13 +714,92 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                     </div>
                 </section>
 
+                {/* Domain Checks - Only during observation */}
+                {isObserving && (
+                    <section className="glass card bg-gradient-to-br from-blue-50/80 to-cyan-50/80 border-blue-100">
+                        <h3 className="section-header">
+                            <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
+                            Quick Checks
+                        </h3>
+
+                        {/* Domain 1: Learning Objective */}
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="font-semibold text-slate-700">Learning Objective Clear?</span>
+                                {objectiveClear && (
+                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
+                                        ✓ Yes
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center justify-between mb-3">
+                                <button
+                                    onClick={() => setObjectiveClear(!objectiveClear)}
+                                    className={`w-16 h-8 rounded-full transition-all ${objectiveClear ? 'bg-cyan-600 shadow-md' : 'bg-slate-300'}`}
+                                >
+                                    <div className={`w-6 h-6 bg-white rounded-full shadow transform transition-transform ${objectiveClear ? 'translate-x-9' : 'translate-x-1'}`} />
+                                </button>
+                            </div>
+                            {objectiveClear && (
+                                <div className="mt-2">
+                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                        Key Concept/Objective Text
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={keyConcept}
+                                        onChange={(e) => setKeyConcept(e.target.value)}
+                                        placeholder="e.g., 'Multiplying fractions' or paste full objective"
+                                        className="input-field text-sm"
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Domain 2: Student Understanding */}
+                        <div className="border-t border-blue-200 pt-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="text-sm font-semibold text-slate-700">
+                                    Ask student: "What are you learning?"
+                                </div>
+                                {studentUnderstanding && (
+                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
+                                        ✓ Recorded
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex gap-2">
+                                {(['None', 'Task', 'Concept'] as const).map((option) => (
+                                    <button
+                                        key={option}
+                                        onClick={() => setStudentUnderstanding(option)}
+                                        className={`flex-1 py-3 px-2 rounded-lg text-sm font-medium transition-all ${studentUnderstanding === option
+                                            ? option === 'None' ? 'bg-red-500 text-white shadow-md'
+                                                : option === 'Task' ? 'bg-amber-500 text-white shadow-md'
+                                                    : 'bg-emerald-500 text-white shadow-md'
+                                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                            }`}
+                                    >
+                                        <div className="flex flex-col items-center gap-1">
+                                            <span>{option === 'None' ? '🤷' : option === 'Task' ? '📝' : '💡'}</span>
+                                            <span>{option === 'None' ? "Couldn't Explain"
+                                                : option === 'Task' ? 'Explained Task'
+                                                    : 'Explained Concept'}</span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+                )}
+
                 {/* Section 2: Action Board */}
                 {isObserving && (
                     <>
-                        {/* Group A: Teacher Questions */}
-                        <section className="glass card">
+                        {/* Group A: Teacher Questions - Coral/Orange Pastel */}
+                        <section className="glass card bg-gradient-to-br from-rose-50/80 to-orange-50/80 border-rose-100">
                             <h3 className="section-header">
-                                <span className="w-3 h-3 bg-blue-600 rounded-full"></span>
+                                <span className="w-3 h-3 bg-rose-500 rounded-full"></span>
                                 Teacher Questions
                             </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -718,10 +830,10 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                             </div>
                         </section>
 
-                        {/* Group B: Student Responses */}
-                        <section className="glass card">
+                        {/* Group B: Student Responses - Mint Green Pastel */}
+                        <section className="glass card bg-gradient-to-br from-emerald-50/80 to-teal-50/80 border-emerald-100">
                             <h3 className="section-header">
-                                <span className="w-3 h-3 bg-green-600 rounded-full"></span>
+                                <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
                                 Student Responses
                             </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -752,10 +864,10 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                             </div>
                         </section>
 
-                        {/* Group C: Wait Time & Environment */}
-                        <section className="glass card">
+                        {/* Group C: Wait Time & Environment - Yellow/Gold Pastel */}
+                        <section className="glass card bg-gradient-to-br from-amber-50/80 to-yellow-50/80 border-amber-100">
                             <h3 className="section-header">
-                                <span className="w-3 h-3 bg-orange-500 rounded-full"></span>
+                                <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
                                 Wait Time & Environment
                             </h3>
                             <div className="space-y-4">
@@ -797,11 +909,11 @@ export function ObservationPage({ observerName, onBack }: { observerName: string
                     </>
                 )}
 
-                {/* Section 3: Qualitative Evidence */}
+                {/* Section 3: Qualitative Evidence - Purple/Violet Pastel */}
                 {isObserving && (
-                    <section className="glass card">
+                    <section className="glass card bg-gradient-to-br from-violet-50/80 to-purple-50/80 border-violet-100">
                         <h3 className="section-header">
-                            <MessageCircle className="w-5 h-5 text-cyan-600" />
+                            <MessageCircle className="w-5 h-5 text-violet-600" />
                             Qualitative Evidence
                         </h3>
 
