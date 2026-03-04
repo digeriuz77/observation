@@ -635,24 +635,6 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
                             )}
                         </div>
 
-                        {/* Domain 2: Student Understanding Check */}
-                        <div className="card">
-                            <h3 className="font-semibold mb-1">Student Understanding Check</h3>
-                            <p className="text-sm text-muted mb-4">Ask a student: "What are you learning today?"</p>
-                            <div className="grid grid-3">
-                                {UNDERSTANDING_OPTIONS.map((option) => (
-                                    <button
-                                        key={option.value}
-                                        onClick={() => setStudentUnderstanding(option.value)}
-                                        className={cn('tally-btn', studentUnderstanding === option.value && 'active')}
-                                    >
-                                        <span className="text-2xl">{option.value === 'None' ? '🤷' : option.value === 'Task' ? '📝' : '💡'}</span>
-                                        <span className="tally-label text-center">{option.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
                         {/* Class Information */}
                         <div className="card">
                             <h3 className="font-semibold mb-4">Class Information</h3>
