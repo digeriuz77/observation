@@ -33,48 +33,46 @@ export default function Home() {
     );
   }
 
-  // Show the new V2 observation interface
-  if (activeTab === 'observe') {
-    return (
-      <ObservationPage
-        observerName={observer}
-        onBack={() => setObserver('')}
-      />
-    );
-  }
-
-  // Dashboard view
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <nav className="glass sticky top-0 z-10 px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-teal-700 rounded-lg flex items-center justify-center text-white font-bold">S</div>
-          <span className="font-bold text-xl tracking-tight text-teal-900">STEM Obs</span>
-        </div>
-        <div className="flex gap-4">
-          <button
-            onClick={() => setActiveTab('observe')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'observe' ? 'bg-teal-700 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            <ClipboardList size={18} />
-            <span>New Observation</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'dashboard' ? 'bg-teal-700 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            <LayoutDashboard size={18} />
-            <span>Dashboard</span>
-          </button>
-        </div>
-        <div className="text-sm font-medium text-slate-500">
-          Logged in as: <span className="text-teal-700">{observer}</span>
-        </div>
-      </nav>
+    <>
+      {activeTab === 'observe' ? (
+        <ObservationPage
+          observerName={observer}
+          onBack={() => setObserver('')}
+        />
+      ) : (
+        <main className="min-h-screen bg-slate-50 text-slate-900">
+          <nav className="glass sticky top-0 z-10 px-6 py-4 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-teal-700 rounded-lg flex items-center justify-center text-white font-bold">S</div>
+              <span className="font-bold text-xl tracking-tight text-teal-900">STEM Obs</span>
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setActiveTab('observe')}
+                className="flex items-center gap-2 px-4 py-2 rounded-full transition-all text-slate-600 hover:bg-slate-100"
+              >
+                <ClipboardList size={18} />
+                <span>New Observation</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className="flex items-center gap-2 px-4 py-2 rounded-full transition-all bg-teal-700 text-white shadow-lg"
+              >
+                <LayoutDashboard size={18} />
+                <span>Dashboard</span>
+              </button>
+            </div>
+            <div className="text-sm font-medium text-slate-500">
+              Logged in as: <span className="text-teal-700">{observer}</span>
+            </div>
+          </nav>
 
-      <div className="max-w-4xl mx-auto p-6 mt-8">
-        <Dashboard />
-      </div>
-    </main>
+          <div className="max-w-4xl mx-auto p-6 mt-8">
+            <Dashboard />
+          </div>
+        </main>
+      )}
+    </>
   );
 }
