@@ -754,29 +754,6 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
                                     />
                                 )}
                             </div>
-
-                            {/* Domain 2: Student Understanding */}
-                            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className="font-medium text-sm">Ask student: "What are you learning?"</span>
-                                    {studentUnderstanding && (
-                                        <span className="badge badge-success">Recorded</span>
-                                    )}
-                                </div>
-                                <div className="grid grid-3">
-                                    {UNDERSTANDING_OPTIONS.map((option) => (
-                                        <button
-                                            key={option.value}
-                                            onClick={() => setStudentUnderstanding(option.value)}
-                                            className={cn('tally-btn', studentUnderstanding === option.value && 'active')}
-                                            style={{ minHeight: '64px' }}
-                                        >
-                                            <span className="text-xl">{option.value === 'None' ? '🤷' : option.value === 'Task' ? '📝' : '💡'}</span>
-                                            <span className="tally-label text-xs">{option.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
                         </div>
 
                         {/* Section 1: Talk-Time Tracker */}
