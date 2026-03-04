@@ -66,7 +66,7 @@ const subjects = ['Mathematics', 'Science', 'English', 'Malay', 'Chinese', 'Art'
 const gradeLevels = ['Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6'];
 const formativeTags = ['Hands Up', 'Cold Call', 'Turn & Talk', 'Whiteboards', 'Think-Pair-Share', 'Choral Response'];
 const departments = ['Science', 'Mathematics', 'English', 'Malay', 'Chinese', 'ICT', 'Art', 'Music', 'PE', 'Integrated'];
-const schools = ['SKBSSL', 'SKBSS2', 'SKBSS3', 'SKBSS4']; // Placeholder school codes
+const schools = ["St. Augustine's", "St. Bartholomew", 'SK Nanga Ajau', 'SK Nanga Spak'];
 
 export function ObservationPage({ observerName, onBack }: { observerName: string; onBack: () => void }) {
     // Context state

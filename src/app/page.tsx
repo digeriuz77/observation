@@ -9,7 +9,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'observe' | 'dashboard'>('observe');
   const [observer, setObserver] = useState<string>('');
 
-  const observers = ['Observer 1', 'Observer 2', 'Observer 3', 'Observer 4', 'Observer 5', 'Observer 6'];
+  const observers = ['Alisa', 'Eddy', 'Fameedah', 'Gary', 'Jen', 'Shamim'];
 
   if (!observer) {
     return (
