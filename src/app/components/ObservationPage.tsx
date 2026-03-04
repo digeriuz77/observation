@@ -47,8 +47,8 @@ interface ObservationData {
     // Environment & Language
     count_code_switching: number;
 
-    // Qualitative Data
-    formative_methods: string[];
+    // Qualitative Data - Changed to counters
+    formative_methods_count: Record<string, number>;
     verbatim_quotes: string;
 
     // M&E Grouping
@@ -126,8 +126,14 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
     const [isHoldingWaitTime, setIsHoldingWaitTime] = useState(false);
     const waitTimeStartRef = useRef<number | null>(null);
 
+    // Formative method counters - changed from selectedTags to individual counts
+    const [formativeCounts, setFormativeCounts] = useState<Record<string, number>>(() => {
+        const initial: Record<string, number> = {};
+        FORMATIVE_TAGS.forEach(tag => initial[tag] = 0);
+        return initial;
+    });
+
     // Qualitative evidence
-    const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [verbatimQuotes, setVerbatimQuotes] = useState('');
 
     // Undo history
@@ -145,13 +151,28 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
     // LocalStorage key for this observer
     const draftKey = useMemo(() => `observation_draft_${observerName.replace(/\s+/g, '_')}`, [observerName]);
 
+    // Start master timer immediately when component mounts
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setMasterTimer(prev => {
+                if (prev >= 900) {
+                    // Auto-stop at 15 minutes
+                    return prev;
+                }
+                return prev + 1;
+            });
+        }, 1000);
+        setMasterInterval(interval);
+
+        return () => clearInterval(interval);
+    }, []);
+
     // Memoized callbacks
     const handleStopObservation = useCallback(() => {
         setIsObserving(false);
         setActiveTalkState(null);
-        if (masterInterval) clearInterval(masterInterval);
         if (talkTimeInterval.current) clearInterval(talkTimeInterval.current);
-    }, [masterInterval]);
+    }, []);
 
     const clearDraft = useCallback(() => {
         try {
@@ -161,6 +182,11 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
             console.error('Failed to clear draft:', e);
         }
     }, [draftKey]);
+
+    // Toggle talk state - clicking the same button toggles it off
+    const toggleTalkState = useCallback((state: 'teacher' | 'silence' | 'student') => {
+        setActiveTalkState(prev => prev === state ? null : state);
+    }, []);
 
     // Load draft from localStorage on mount
     useEffect(() => {
@@ -186,9 +212,9 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
                 setRespPeer(draft.respPeer || 0);
                 setCodeSwitching(draft.codeSwitching || 0);
                 setWaitTimes(draft.waitTimes || []);
-                setSelectedTags(draft.selectedTags || []);
+                setFormativeCounts(draft.formativeCounts || {});
                 setVerbatimQuotes(draft.verbatimQuotes || '');
-                setMasterTimer(draft.masterTimer || 0);
+                // Don't restore masterTimer - it starts fresh each time
                 if (draft.lastSaved) {
                     setLastSaved(new Date(draft.lastSaved));
                 }
@@ -221,9 +247,9 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
             respPeer,
             codeSwitching,
             waitTimes,
-            selectedTags,
+            formativeCounts,
             verbatimQuotes,
-            masterTimer,
+            // Don't save masterTimer - it starts fresh each time
             lastSaved: new Date().toISOString()
         };
 
@@ -242,7 +268,8 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
         qClosed, qOpen, qProbe,
         respShort, respExtended, respPeer,
         codeSwitching, waitTimes,
-        selectedTags, verbatimQuotes, masterTimer,
+        formativeCounts,
+        verbatimQuotes,
         draftKey, isObserving
     ]);
 
@@ -263,20 +290,7 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
         };
     }, []);
 
-    // Master timer - runs for 15 minutes max
-    useEffect(() => {
-        if (isObserving && masterTimer < 900) {
-            const interval = setInterval(() => {
-                setMasterTimer(prev => prev + 1);
-            }, 1000);
-            setMasterInterval(interval);
-            return () => clearInterval(interval);
-        } else if (masterTimer >= 900) {
-            handleStopObservation();
-        }
-    }, [isObserving, masterTimer, handleStopObservation]);
-
-    // Talk time tracker - updates every second
+    // Talk time tracker - updates every second when state is active
     useEffect(() => {
         if (isObserving && activeTalkState) {
             talkTimeInterval.current = setInterval(() => {
@@ -367,6 +381,14 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
         setCodeSwitching(prev => prev + 1);
     }, [codeSwitching, addToHistory]);
 
+    // Formative method counter increment
+    const incrementFormativeTag = useCallback((tag: string) => {
+        setFormativeCounts(prev => ({
+            ...prev,
+            [tag]: (prev[tag] || 0) + 1
+        }));
+    }, []);
+
     // Start observation
     const handleStartObservation = useCallback(() => {
         if (!teacherName || !subject || !gradeLevel) {
@@ -374,7 +396,6 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
             return;
         }
         setIsObserving(true);
-        setMasterTimer(0);
         setHistory([]);
     }, [teacherName, subject, gradeLevel]);
 
@@ -391,15 +412,6 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
             waitTimeStartRef.current = null;
         }
         setIsHoldingWaitTime(false);
-    }, []);
-
-    // Toggle formative tag
-    const toggleTag = useCallback((tag: string) => {
-        setSelectedTags(prev =>
-            prev.includes(tag)
-                ? prev.filter(t => t !== tag)
-                : [...prev, tag]
-        );
     }, []);
 
     // Save to localStorage for offline
@@ -469,8 +481,8 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
             // Environment
             count_code_switching: codeSwitching,
 
-            // Qualitative
-            formative_methods: selectedTags,
+            // Qualitative - Changed to counters
+            formative_methods_count: formativeCounts,
             verbatim_quotes: verbatimQuotes,
 
             // M&E Grouping
@@ -513,7 +525,7 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
         qClosed, qOpen, qProbe,
         respShort, respExtended, respPeer,
         codeSwitching,
-        selectedTags, verbatimQuotes,
+        formativeCounts, verbatimQuotes,
         saveToLocalStorage, syncPendingObservations
     ]);
 
@@ -540,7 +552,11 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
         setRespPeer(0);
         setCodeSwitching(0);
         setWaitTimes([]);
-        setSelectedTags([]);
+        setFormativeCounts(() => {
+            const initial: Record<string, number> = {};
+            FORMATIVE_TAGS.forEach(tag => initial[tag] = 0);
+            return initial;
+        });
         setVerbatimQuotes('');
         setHistory([]);
         setSubmitSuccess(false);
@@ -740,7 +756,7 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
                             </div>
 
                             {/* Domain 2: Student Understanding */}
-                            <div className="border-top-subtle" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+                            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
                                 <div className="flex items-center justify-between mb-3">
                                     <span className="font-medium text-sm">Ask student: "What are you learning?"</span>
                                     {studentUnderstanding && (
@@ -771,7 +787,7 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
                             </h3>
                             <div className="grid grid-3">
                                 <button
-                                    onClick={() => setActiveTalkState('teacher')}
+                                    onClick={() => toggleTalkState('teacher')}
                                     className={cn('tally-btn', activeTalkState === 'teacher' && 'active')}
                                 >
                                     <span className="text-2xl">🗣️</span>
@@ -779,7 +795,7 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
                                     <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeTeacherTalking)}</span>
                                 </button>
                                 <button
-                                    onClick={() => setActiveTalkState('silence')}
+                                    onClick={() => toggleTalkState('silence')}
                                     className={cn('tally-btn', activeTalkState === 'silence' && 'active')}
                                 >
                                     <span className="text-2xl">⏳</span>
@@ -787,7 +803,7 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
                                     <span className="timer" style={{ fontSize: '18px' }}>{formatTime(timeSilence)}</span>
                                 </button>
                                 <button
-                                    onClick={() => setActiveTalkState('student')}
+                                    onClick={() => toggleTalkState('student')}
                                     className={cn('tally-btn', activeTalkState === 'student' && 'active')}
                                 >
                                     <span className="text-2xl">💬</span>
@@ -878,31 +894,49 @@ export function ObservationPage({ observerName, onBack }: ObservationPageProps) 
                             </button>
                         </section>
 
-                        {/* Section 5: Qualitative Evidence */}
+                        {/* Section 5: Student Understanding Check - MOVED HERE */}
+                        <section className="card">
+                            <h3 className="font-semibold mb-4">Student Understanding Check</h3>
+                            <p className="text-sm text-muted mb-4">Ask a student: "What are you learning today?"</p>
+                            <div className="grid grid-3">
+                                {UNDERSTANDING_OPTIONS.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        onClick={() => setStudentUnderstanding(option.value)}
+                                        className={cn('tally-btn', studentUnderstanding === option.value && 'active')}
+                                        style={{ minHeight: '64px' }}
+                                    >
+                                        <span className="text-xl">{option.value === 'None' ? '🤷' : option.value === 'Task' ? '📝' : '💡'}</span>
+                                        <span className="tally-label text-xs">{option.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* Section 6: Formative Methods Counters */}
+                        <section className="card">
+                            <h3 className="font-semibold mb-4">Formative Methods</h3>
+                            <div className="grid grid-2 gap-3">
+                                {FORMATIVE_TAGS.map(tag => (
+                                    <button
+                                        key={tag}
+                                        onClick={() => incrementFormativeTag(tag)}
+                                        className="tally-btn"
+                                        style={{ minHeight: '60px' }}
+                                    >
+                                        <span className="tally-count">{formativeCounts[tag] || 0}</span>
+                                        <span className="tally-label text-sm">{tag}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* Section 7: Qualitative Evidence */}
                         <section className="card">
                             <h3 className="font-semibold flex items-center gap-2 mb-4">
                                 <MessageCircle size={18} className="text-accent" />
                                 Qualitative Evidence
                             </h3>
-
-                            {/* Formative Tags */}
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-secondary mb-3">
-                                    Formative Methods
-                                    <span className="badge badge-accent ml-2">{selectedTags.length}</span>
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {FORMATIVE_TAGS.map(tag => (
-                                        <button
-                                            key={tag}
-                                            onClick={() => toggleTag(tag)}
-                                            className={cn('tag', selectedTags.includes(tag) && 'active')}
-                                        >
-                                            {tag}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
 
                             {/* Verbatim Quotes */}
                             <div>
