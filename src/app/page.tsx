@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ObservationForm } from './components/ObservationForm';
+import { ObservationPage } from './components/ObservationPage';
 import { Dashboard } from './components/Dashboard';
 import { ClipboardList, LayoutDashboard } from 'lucide-react';
 
@@ -33,6 +33,17 @@ export default function Home() {
     );
   }
 
+  // Show the new V2 observation interface
+  if (activeTab === 'observe') {
+    return (
+      <ObservationPage
+        observerName={observer}
+        onBack={() => setObserver('')}
+      />
+    );
+  }
+
+  // Dashboard view
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <nav className="glass sticky top-0 z-10 px-6 py-4 flex justify-between items-center">
@@ -62,11 +73,7 @@ export default function Home() {
       </nav>
 
       <div className="max-w-4xl mx-auto p-6 mt-8">
-        {activeTab === 'observe' ? (
-          <ObservationForm observerName={observer} />
-        ) : (
-          <Dashboard />
-        )}
+        <Dashboard />
       </div>
     </main>
   );
