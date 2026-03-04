@@ -136,9 +136,12 @@ export function Dashboard() {
                 body: JSON.stringify({ observations }),
             });
 
-            if (!response.ok) throw new Error('Analysis failed');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || errorData.details || 'Analysis failed');
+            }
 
-            // Handle streaming response
+            // Handle streaming response - Vercel AI SDK streams plain text
             const reader = response.body?.getReader();
             if (!reader) throw new Error('No response body');
 
@@ -150,32 +153,13 @@ export function Dashboard() {
                 if (done) break;
 
                 const chunk = decoder.decode(value, { stream: true });
-                // Handle SSE format (data: lines)
-                const lines = chunk.split('\n');
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = line.slice(6);
-                        if (data === '[DONE]') continue;
-                        try {
-                            const parsed = JSON.parse(data);
-                            if (parsed.choices?.[0]?.delta?.content) {
-                                fullText += parsed.choices[0].delta.content;
-                                setAnalysis(fullText);
-                            }
-                        } catch {
-                            // If not JSON, treat as plain text
-                            fullText += data;
-                            setAnalysis(fullText);
-                        }
-                    } else if (line.trim()) {
-                        fullText += line;
-                        setAnalysis(fullText);
-                    }
-                }
+                fullText += chunk;
+                setAnalysis(fullText);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Analysis error:', error);
-            setAnalysis('Error generating analysis. Please try again.');
+            const errorMsg = error?.message || 'Error generating analysis. Please try again.';
+            setAnalysis(`❌ Error: ${errorMsg}`);
         } finally {
             setAnalyzing(false);
         }

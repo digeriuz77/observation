@@ -18,6 +18,15 @@ export async function POST(req: Request) {
             );
         }
 
+        // Check for API key
+        if (!process.env.ObservationAPIKey) {
+            console.error('Missing ObservationAPIKey environment variable');
+            return NextResponse.json(
+                { error: 'API key not configured. Please set ObservationAPIKey in your environment.' },
+                { status: 500 }
+            );
+        }
+
         // Format observations for the AI prompt
         const observationsText = observations.map((obs: any, index: number) => `
 Observation ${index + 1}:
@@ -59,16 +68,25 @@ Provide your analysis in a structured format with clear headings.`;
 
         // Stream the response using xAI Grok
         const result = streamText({
-            model: xai('grok-4-fast-reasoning'),
+            model: xai('grok-4.1-fast-reasoning'),
             prompt,
             temperature: 0.7,
         });
 
         return result.toTextStreamResponse();
-    } catch (error) {
+    } catch (error: any) {
         console.error('AI Analysis Error:', error);
+
+        // Provide more specific error messages
+        const errorMessage = error?.message || 'Failed to generate analysis';
+
         return NextResponse.json(
-            { error: 'Failed to generate analysis' },
+            {
+                error: 'Analysis failed',
+                details: errorMessage.includes('API key')
+                    ? 'Invalid or missing API key. Please check ObservationAPIKey environment variable.'
+                    : errorMessage
+            },
             { status: 500 }
         );
     }
